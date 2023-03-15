@@ -1,0 +1,193 @@
+---
+title: "Heterogeneous Ensemble Classifier Creation Using Majority Rule Approach"
+author: "Ryan Geier"
+date: "2023-03-13"
+output: word_document
+---
+
+```{r setup, warnings = FALSE, message=FALSE, include=FALSE}
+knitr::opts_chunk$set(warnings = FALSE, message=FALSE, echo = TRUE)
+```
+
+```{r, warning=FALSE, message=FALSE}
+#load the mlbench package which has the BreastCancer data set
+require(mlbench)
+
+# if you don't have any required package, use the install.packages() command
+
+# load the data set
+data(BreastCancer)
+
+#List objects
+ls(BreastCancer)
+```
+
+```{r, warning=FALSE, message=FALSE}
+# some algorithms don't like missing values, so remove rows with missing values
+BreastCancer <- na.omit(BreastCancer) 
+
+# remove the unique identifier, which is useless and would confuse the machine learning algorithms
+BreastCancer$Id <- NULL 
+
+#Inspect updated Dataframe
+head(BreastCancer)
+str(BreastCancer)
+```
+
+```{r, warning=FALSE, message=FALSE}
+#Load e1071 for Support Vector Machine
+library(e1071)
+#Train the Support Vector Machine to Class using all columns
+mysvm <- svm(Class ~ ., BreastCancer)
+
+#Predict using trained model
+mysvm.pred <- predict(mysvm, BreastCancer)
+
+#See results of trained model
+table(mysvm.pred,BreastCancer$Class)
+```
+
+```{r, warning=FALSE, message=FALSE}
+#Load klaR for Naive Bayes Classifier
+library(klaR)
+
+#Train Naive Bayes
+mynb <- NaiveBayes(Class ~ ., BreastCancer)
+
+#Predict using trained model
+mynb.pred <- predict(mynb,BreastCancer)
+
+#See results of trained model. NOTE: Have to specify "$class" object of prediction
+table(mynb.pred$class,BreastCancer$Class)
+```
+
+```{r, warning=FALSE, message=FALSE}
+#Load nnet and neuralnet
+library(nnet)
+library(neuralnet)
+
+#Check the structure to ensure numeric (requred for neural network)
+str(BreastCancer)
+
+#Make numeric
+for (i in c(1:9)){
+BreastCancer[,i] <-(as.numeric(BreastCancer[,i])-min(as.numeric(BreastCancer[,i]))) /
+  (max(as.numeric(BreastCancer[,i]))-min(as.numeric(BreastCancer[,i])))
+}
+
+#Train neural network with two layers, 5 nodes in first and 4 in the second
+mynnet <- neuralnet(Class ~ ., BreastCancer, hidden=c(5,4))
+
+#Compute predictions, specifying the compute function in package "neuralnet"
+mynnet.pred <- neuralnet::compute(mynnet, BreastCancer[,-c(10)])
+
+#Translate into class 0 or 1
+mynnet.pred.class <-apply(mynnet.pred$net.result,1,which.max)-1
+
+#See results of trained model. NOTE: Neural Network uses 0 or 1 indicating benign or malignant, you want to make both neural network and BreastCancer Class column the same structure
+table(as.factor(mynnet.pred.class), as.factor(ifelse(BreastCancer$Class == "benign", 0, 1)))
+```
+
+```{r, warning=FALSE, message=FALSE}
+#Load library MASS and rpart
+library(MASS)
+library(rpart)
+
+#Train algorithm
+mytree <- rpart(Class ~ ., BreastCancer)
+
+#Plot the tree
+par(mar=c(10,10,10,10))
+plot(mytree); text(mytree) 
+
+#Predict
+mytree.pred <- predict(mytree,BreastCancer,type="class")
+
+#See results
+table(mytree.pred,BreastCancer$Class)
+```
+
+```{r, warning=FALSE, message=FALSE}
+# Leave-1-Out Cross Validation (LOOCV) for decision tree
+ans <- numeric(length(BreastCancer[,1]))
+for (i in 1:length(BreastCancer[,1])) {
+  mytree <- rpart(Class ~ ., BreastCancer[-i,])
+  mytree.pred <- predict(mytree,BreastCancer[i,],type="class")
+  ans[i] <- mytree.pred
+}
+ans <- factor(ans,labels=levels(BreastCancer$Class))
+table(ans,BreastCancer$Class)
+
+# The same as above in this case, don't have to use going forward. 
+```
+
+```{r, warning=FALSE, message=FALSE}
+#Load library MASS
+#Quadratic Discriminant Analysis
+library(MASS)
+
+#Train algorithm
+myqda <- qda(Class ~ ., BreastCancer)
+
+#Predict
+myqda.pred <- predict(myqda, BreastCancer)
+
+#See results. NOTE: have to specify $class object
+table(myqda.pred$class,BreastCancer$Class)
+
+```
+
+```{r, warning=FALSE, message=FALSE}
+#Load library klaR
+#Regularised Discriminant Analysis
+library(klaR)
+
+#Train algorithm
+myrda <- rda(Class ~ ., BreastCancer)
+
+#Predict
+myrda.pred <- predict(myrda, BreastCancer)
+
+#See results. NOTE: have to specify $class object
+table(myrda.pred$class,BreastCancer$Class)
+```
+
+
+
+```{r, warning=FALSE, message=FALSE}
+#Heterogeneous Ensemble Classifier Creation using Majority rule ensemble approach
+
+#Combine all of the predictions into a single data frame
+combine.classes<-data.frame(myrda.pred$class,myqda.pred$class, 
+                            mytree.pred,
+                            mynnet.pred.class, mysvm.pred, mynb.pred$class)
+
+#We need to convert class factors into numeric for the Majority rule approach.
+head(combine.classes)
+
+#Translate all benign or malignant into 0 or 1's
+combine.classes$myrda.pred.class<-ifelse(combine.classes$myrda.pred.class=="benign", 0, 1)
+combine.classes[,2]<-ifelse(combine.classes[,2]=="benign", 0, 1)
+combine.classes[,3]<-ifelse(combine.classes[,3]=="benign", 0, 1)
+combine.classes[,5]<-ifelse(combine.classes[,5]=="benign", 0, 1)
+combine.classes[,6]<-ifelse(combine.classes[,6]=="benign", 0, 1)
+
+#Check structure to ensure all columns are numeric.
+str(combine.classes)
+
+#Sum the rows to get the count of how many times a record was classified as malignant. NOTE: remember, 0=benign, so we are counting for malignant.
+majority.vote=rowSums(combine.classes)
+
+#Check out work
+head(majority.vote)
+
+#Create a new column to our classifer data frame, adding the sums from above. 
+combine.classes[,7]<-majority.vote
+
+#Create another new column to our data frame, indicating malignant/benign if it has the majority vote. With 6 classifiers, I'm choosing the tiebreaker majority vote (=3) to go to malignant. You may choose Benign or >=4 instead if you wish or the objective of your model calls for it. 
+combine.classes[,8]<-ifelse(combine.classes[,7]>=3, "malignant", "benign")
+
+#Check results
+table(combine.classes[,8], BreastCancer$Class)
+```
+
