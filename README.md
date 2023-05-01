@@ -7,7 +7,7 @@ Naive Bayes,
 Neural network,
 Decision Trees,
 Quadratic Discriminant Analysis,
-and Regularised Discriminant Analysis. 
+and Regularized Discriminant Analysis. 
 
 Leave-one-out cross validation (LOOCV) was used on the decision trees to ensure consistency in results.
 
