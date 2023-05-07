@@ -1,4 +1,4 @@
-# Heterogeneous-Ensemble-Classifier-Creation-Using-Majority-Rule-Approach
+# Heterogeneous-Ensemble-Classifier-Using-Majority-Rule-Approach
 
 This .Rmd is set to train an ensemble classifier using the BreastCancer dataset.
 The classifiers used were:
